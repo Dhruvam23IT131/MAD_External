@@ -9,6 +9,11 @@ class FirebaseService {
 
   FirebaseService._init();
 
+  Future<bool> isOnline() async {
+    final results = await Connectivity().checkConnectivity();
+    return !results.contains(ConnectivityResult.none);
+  }
+
   // Sync profile to Firebase
   Future<void> syncProfile(UserProfile profile) async {
     try {
@@ -20,24 +25,42 @@ class FirebaseService {
 
   // Sync meal logs to Firebase
   Future<void> syncMealLogs() async {
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult.contains(ConnectivityResult.none)) return;
-
+    if (!await isOnline()) return;
     try {
-      final unsynced = await DatabaseHelper.instance.getUnsyncedLogs();
+      final unsyncedLogs = await DatabaseHelper.instance.getUnsyncedLogs();
+      if (unsyncedLogs.isEmpty) return;
 
-      for (var map in unsynced) {
-        final entry = MealEntry.fromMap(map);
-        
-        // Push to Firestore
-        await _firestore.collection('meal_logs').doc(entry.id).set(entry.toMap());
-        
-        // Mark as synced in local DB
-        await DatabaseHelper.instance.markAsSynced(entry.id);
+      final batch = _firestore.batch();
+      for (var log in unsyncedLogs) {
+        final docRef = _firestore.collection('meal_logs').doc(log['id']);
+        batch.set(docRef, log);
       }
-      print('Firebase Sync Success: ${unsynced.length} logs synced');
+
+      await batch.commit();
+      for (var log in unsyncedLogs) {
+        await DatabaseHelper.instance.markAsSynced(log['id']);
+      }
+      print('Firebase Sync Success: ${unsyncedLogs.length} logs synced');
     } catch (e) {
-      print('Firebase Sync Error (Logs): $e');
+      print('Firebase Sync Error: $e');
+    }
+  }
+
+  Future<void> syncUserProfile(UserProfile profile) async {
+    try {
+      await _firestore.collection('users').doc('user_1').set(profile.toMap());
+      print('Profile Synced to Firebase');
+    } catch (e) {
+      print('Profile Sync Error: $e');
+    }
+  }
+
+  Future<void> syncCustomFood(FoodItem food) async {
+    try {
+      await _firestore.collection('food_items').doc(food.id).set(food.toMap());
+      print('Custom Food Synced to Firebase');
+    } catch (e) {
+      print('Food Sync Error: $e');
     }
   }
 

@@ -1,45 +1,43 @@
 import 'package:flutter/material.dart';
-import 'package:percent_indicator/percent_indicator.dart';
 import '../core/constants/app_colors.dart';
 
 class CalorieRing extends StatelessWidget {
   final double consumed;
   final double goal;
 
-  const CalorieRing({
-    super.key,
-    required this.consumed,
-    required this.goal,
-  });
+  const CalorieRing({super.key, required this.consumed, required this.goal});
 
   @override
   Widget build(BuildContext context) {
-    double percent = consumed / goal;
-    if (percent > 1.0) percent = 1.0;
-    if (percent < 0.0) percent = 0.0;
-
-    return CircularPercentIndicator(
-      radius: 80.0,
-      lineWidth: 12.0,
-      percent: percent,
-      center: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            (goal - consumed).toInt().toString(),
-            style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 24),
+    final progress = (consumed / goal).clamp(0.0, 1.0);
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox(
+          width: 100,
+          height: 100,
+          child: CircularProgressIndicator(
+            value: progress,
+            strokeWidth: 10,
+            backgroundColor: AppColors.primaryLight,
+            color: AppColors.primary,
+            strokeCap: StrokeCap.round,
           ),
-          Text(
-            'Remaining',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-      circularStrokeCap: CircularStrokeCap.round,
-      backgroundColor: AppColors.divider,
-      progressColor: AppColors.primary,
-      animation: true,
-      animationDuration: 1000,
+        ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              consumed.toInt().toString(),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              'kcal',
+              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -60,29 +58,48 @@ class MacroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final progress = (value / goal).clamp(0.0, 1.0);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text('${value.toInt()} / ${goal.toInt()}g', 
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 14)),
+          Text('${value.toInt()}g', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
           const SizedBox(height: 8),
-          LinearPercentIndicator(
-            lineHeight: 4.0,
-            percent: (value / goal).clamp(0.0, 1.0),
-            backgroundColor: AppColors.divider,
-            progressColor: color,
-            barRadius: const Radius.circular(2),
-            padding: EdgeInsets.zero,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 4,
+              backgroundColor: color.withOpacity(0.1),
+              color: color,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class LoadingShimmer extends StatelessWidget {
+  const LoadingShimmer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 100,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(16),
       ),
     );
   }

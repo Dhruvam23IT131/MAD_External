@@ -22,6 +22,7 @@ class FoodProvider with ChangeNotifier {
   Future<void> addCustomFood(FoodItem food) async {
     await DatabaseHelper.instance.insertFoodItem(food);
     await fetchFoods();
+    FirebaseService.instance.syncCustomFood(food);
   }
 }
 
@@ -124,5 +125,6 @@ class UserProfileProvider with ChangeNotifier {
     final box = await Hive.openBox(profileBoxName);
     await box.put('current_profile', profile.toMap());
     notifyListeners();
+    FirebaseService.instance.syncUserProfile(profile);
   }
 }

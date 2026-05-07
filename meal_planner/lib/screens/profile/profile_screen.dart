@@ -170,29 +170,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildOfflineSyncCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        children: [
-          const Icon(Icons.cloud_done_outlined, color: AppColors.primary),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('Offline mode active', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                Text('3 entries pending sync', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              ],
-            ),
+    return FutureBuilder<bool>(
+      future: FirebaseService.instance.isOnline(),
+      builder: (context, snapshot) {
+        final online = snapshot.data ?? true;
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: online ? AppColors.primaryLight : Colors.grey[200], borderRadius: BorderRadius.circular(20)),
+          child: Row(
+            children: [
+              Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined, color: online ? AppColors.primary : Colors.grey),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(online ? 'Cloud Sync Active' : 'Offline Mode Active', style: TextStyle(fontWeight: FontWeight.bold, color: online ? AppColors.primary : Colors.grey[800])),
+                    const Text('Your data is saved locally', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  ],
+                ),
+              ),
+              if (online)
+                ElevatedButton(
+                  onPressed: () => FirebaseService.instance.syncMealLogs(),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  child: const Text('Sync Now'),
+                ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => FirebaseService.instance.syncMealLogs(),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: const Text('Sync'),
-          ),
-        ],
-      ),
+        );
+      }
     );
   }
 
