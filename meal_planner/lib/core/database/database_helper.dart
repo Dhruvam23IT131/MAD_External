@@ -13,13 +13,10 @@ class DatabaseHelper {
 
   Future<void> init() async {
     await Hive.initFlutter();
-    
-    // Register adapters if you had them, but we'll use Map for simplicity to avoid boilerplate
     await Hive.openBox(foodBoxName);
     await Hive.openBox(logBoxName);
     await Hive.openBox(planBoxName);
 
-    // Seed if empty
     final foodBox = Hive.box(foodBoxName);
     if (foodBox.isEmpty) {
       for (var food in SeedData.initialFoods) {
@@ -33,6 +30,11 @@ class DatabaseHelper {
     await box.put(entry.id, entry.toMap());
   }
 
+  Future<void> deleteMealLog(String id) async {
+    final box = Hive.box(logBoxName);
+    await box.delete(id);
+  }
+
   Future<List<MealEntry>> getMealLogsByDate(DateTime date) async {
     final box = Hive.box(logBoxName);
     final dateStr = date.toIso8601String().split('T')[0];
@@ -40,6 +42,18 @@ class DatabaseHelper {
     return box.values
         .where((item) => item['date'].toString().startsWith(dateStr))
         .map((item) => MealEntry.fromMap(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Future<List<MealEntry>> getMealLogsInRange(DateTime start, DateTime end) async {
+    final box = Hive.box(logBoxName);
+    final startOfDay = DateTime(start.year, start.month, start.day);
+    final endOfDay = DateTime(end.year, end.month, end.day, 23, 59, 59);
+
+    return box.values
+        .map((item) => MealEntry.fromMap(Map<String, dynamic>.from(item)))
+        .where((entry) => entry.date.isAfter(startOfDay.subtract(const Duration(seconds: 1))) && 
+                          entry.date.isBefore(endOfDay.add(const Duration(seconds: 1))))
         .toList();
   }
 
@@ -63,7 +77,6 @@ class DatabaseHelper {
     await box.put(food.id, food.toMap());
   }
 
-  // Sync helpers
   Future<List<Map<String, dynamic>>> getUnsyncedLogs() async {
     final box = Hive.box(logBoxName);
     return box.values
@@ -74,8 +87,11 @@ class DatabaseHelper {
 
   Future<void> markAsSynced(String id) async {
     final box = Hive.box(logBoxName);
-    final data = Map<String, dynamic>.from(box.get(id));
-    data['synced'] = 1;
-    await box.put(id, data);
+    final data = box.get(id);
+    if (data != null) {
+      final map = Map<String, dynamic>.from(data);
+      map['synced'] = 1;
+      await box.put(id, map);
+    }
   }
 }

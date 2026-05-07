@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../core/database/database_helper.dart';
 import '../models/models.dart';
 import '../core/firebase_service.dart';
@@ -28,6 +29,9 @@ class MealProvider with ChangeNotifier {
   List<MealEntry> _dailyLogs = [];
   List<MealEntry> get dailyLogs => _dailyLogs;
 
+  List<MealEntry> _weeklyLogs = [];
+  List<MealEntry> get weeklyLogs => _weeklyLogs;
+
   DateTime _selectedDate = DateTime.now();
   DateTime get selectedDate => _selectedDate;
 
@@ -39,7 +43,14 @@ class MealProvider with ChangeNotifier {
   Future<void> fetchLogs(DateTime date) async {
     _selectedDate = date;
     _dailyLogs = await DatabaseHelper.instance.getMealLogsByDate(date);
+    await fetchWeeklyLogs();
     notifyListeners();
+  }
+
+  Future<void> fetchWeeklyLogs() async {
+    final now = DateTime.now();
+    final start = now.subtract(const Duration(days: 6));
+    _weeklyLogs = await DatabaseHelper.instance.getMealLogsInRange(start, now);
   }
 
   Future<void> addMealEntry(MealEntry entry) async {
@@ -53,6 +64,32 @@ class MealProvider with ChangeNotifier {
         entry.date.day == _selectedDate.day) {
       await fetchLogs(_selectedDate);
     }
+  }
+
+  Future<void> deleteMealEntry(String id) async {
+    await DatabaseHelper.instance.deleteMealLog(id);
+    await fetchLogs(_selectedDate);
+  }
+
+  Future<void> copyDayPlan(DateTime from, DateTime to) async {
+    final logs = await DatabaseHelper.instance.getMealLogsByDate(from);
+    for (var log in logs) {
+      final newEntry = MealEntry(
+        id: const Uuid().v4(),
+        foodItemId: log.foodItemId,
+        foodName: log.foodName,
+        mealType: log.mealType,
+        date: to,
+        quantity: log.quantity,
+        totalCalories: log.totalCalories,
+        totalProtein: log.totalProtein,
+        totalCarbs: log.totalCarbs,
+        totalFat: log.totalFat,
+      );
+      await DatabaseHelper.instance.insertMealLog(newEntry);
+    }
+    await fetchLogs(_selectedDate);
+    FirebaseService.instance.syncMealLogs();
   }
 
   void setSelectedDate(DateTime date) {

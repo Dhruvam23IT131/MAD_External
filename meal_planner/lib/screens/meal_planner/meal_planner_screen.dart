@@ -14,37 +14,34 @@ class MealPlannerScreen extends StatefulWidget {
 
 class _MealPlannerScreenState extends State<MealPlannerScreen> {
   DateTime _focusedDay = DateTime.now();
+  String _selectedCategory = 'All';
+
+  final List<String> _categories = ['All', 'Breakfast', 'Lunch', 'Dinner', 'Snacks'];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Weekly Planner')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Meal Plan', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
+        foregroundColor: AppColors.textPrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.copy_all, color: AppColors.primary),
+            onPressed: () => _showCopyDialog(),
+            tooltip: 'Copy today\'s plan to tomorrow',
+          ),
+        ],
+      ),
       body: Consumer<MealProvider>(
         builder: (context, mealProv, child) {
           return Column(
             children: [
               _buildCalendarStrip(mealProv),
+              _buildCategoryFilter(),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _buildPlanSlot(context, 'Breakfast', mealProv),
-                    _buildPlanSlot(context, 'Lunch', mealProv),
-                    _buildPlanSlot(context, 'Dinner', mealProv),
-                    _buildPlanSlot(context, 'Snacks', mealProv),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Copied to next day (Mock)')),
-                        );
-                      },
-                      icon: const Icon(Icons.copy),
-                      label: const Text('Copy to Next Day'),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.divider, foregroundColor: Colors.white),
-                    ),
-                  ],
-                ),
+                child: _buildMealList(mealProv),
               ),
             ],
           );
@@ -55,14 +52,14 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
 
   Widget _buildCalendarStrip(MealProvider mealProv) {
     return Container(
-      height: 100,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: const BoxDecoration(color: AppColors.surface),
+      height: 90,
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemBuilder: (context, index) {
-          final day = DateTime.now().add(Duration(days: index - 3));
+          final day = DateTime.now().add(Duration(days: index - 2));
           final isSelected = day.day == _focusedDay.day && day.month == _focusedDay.month;
           return GestureDetector(
             onTap: () {
@@ -70,18 +67,18 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
               mealProv.setSelectedDate(day);
             },
             child: Container(
-              width: 60,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
+              width: 55,
+              margin: const EdgeInsets.only(right: 12),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                color: isSelected ? AppColors.primary : Colors.white,
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(DateFormat('E').format(day), style: TextStyle(color: isSelected ? Colors.black : Colors.white70, fontSize: 12)),
-                  Text(day.day.toString(), style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text(DateFormat('E').format(day), style: TextStyle(color: isSelected ? Colors.white70 : AppColors.textSecondary, fontSize: 12)),
+                  Text(day.day.toString(), style: TextStyle(color: isSelected ? Colors.white : AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
                 ],
               ),
             ),
@@ -91,57 +88,184 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
     );
   }
 
-  Widget _buildPlanSlot(BuildContext context, String title, MealProvider mealProv) {
-    final meals = mealProv.dailyLogs.where((m) => m.mealType.toLowerCase() == title.toLowerCase()).toList();
-    final foodName = meals.isEmpty ? 'Not planned' : meals.map((m) => m.foodName).join(', ');
+  Widget _buildCategoryFilter() {
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _categories.length,
+        itemBuilder: (context, index) {
+          final cat = _categories[index];
+          final isSelected = _selectedCategory == cat;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: FilterChip(
+              label: Text(cat, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : AppColors.textSecondary)),
+              selected: isSelected,
+              onSelected: (val) => setState(() => _selectedCategory = cat),
+              selectedColor: AppColors.primary,
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? AppColors.primary : AppColors.divider)),
+              showCheckmark: false,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMealList(MealProvider mealProv) {
+    final allEntries = mealProv.dailyLogs;
+    final filteredEntries = _selectedCategory == 'All' 
+        ? allEntries 
+        : allEntries.where((m) => m.mealType.toLowerCase() == _selectedCategory.toLowerCase()).toList();
+
+    final Map<String, List<dynamic>> grouped = {};
+    for (var entry in filteredEntries) {
+      grouped.putIfAbsent(entry.mealType, () => []).add(entry);
+    }
+
+    if (grouped.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.calendar_today_outlined, size: 64, color: AppColors.divider),
+              const SizedBox(height: 16),
+              const Text('Nothing planned for this day', style: TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 24),
+              _buildAddMealButton(),
+            ],
+          ),
+        );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        ...grouped.entries.map((group) => _buildMealCard(group.key, group.value)).toList(),
+        const SizedBox(height: 16),
+        _buildAddMealButton(),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildMealCard(String type, List<dynamic> entries) {
+    final totalKcal = entries.fold(0.0, (sum, e) => sum + e.totalCalories).toInt();
+    final totalP = entries.fold(0.0, (sum, e) => sum + e.totalProtein).toInt();
+    final totalC = entries.fold(0.0, (sum, e) => sum + e.totalCarbs).toInt();
+    final totalF = entries.fold(0.0, (sum, e) => sum + e.totalFat).toInt();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isSelectedMeal(title, mealProv) ? AppColors.primary : AppColors.divider),
-      ),
-      child: Row(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppColors.divider)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(Icons.restaurant, color: AppColors.primary, size: 20),
+          Row(
+            children: [
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: _getDotColor(type), shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              Text(type, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Spacer(),
+              Text('$totalKcal kcal', style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 12),
+          ...entries.map((e) => Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Row(
               children: [
-                Text(title, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12)),
-                Text(foodName, 
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold, 
-                      fontSize: 16,
-                      color: meals.isEmpty ? Colors.white38 : Colors.white,
-                    )),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(e.foodName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('${e.quantity.toInt()} units', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                  onPressed: () => context.read<MealProvider>().deleteMealEntry(e.id),
+                ),
               ],
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, size: 20), 
-            onPressed: () {
-              Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (_) => const FoodSearchScreen())
-              ).then((_) {
-                mealProv.fetchLogs(_focusedDay);
-              });
-            }
+          )).toList(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _macroLabel('P: ${totalP}g', Colors.blue),
+              const SizedBox(width: 8),
+              _macroLabel('C: ${totalC}g', Colors.orange),
+              const SizedBox(width: 8),
+              _macroLabel('F: ${totalF}g', Colors.red),
+            ],
           ),
         ],
       ),
     );
   }
 
-  bool isSelectedMeal(String title, MealProvider mealProv) {
-    return mealProv.dailyLogs.any((m) => m.mealType.toLowerCase() == title.toLowerCase());
+  Color _getDotColor(String type) {
+    switch(type.toLowerCase()) {
+      case 'breakfast': return Colors.orange;
+      case 'lunch': return Colors.teal;
+      case 'dinner': return Colors.indigo;
+      default: return Colors.red;
+    }
+  }
+
+  Widget _macroLabel(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+    );
+  }
+
+  Widget _buildAddMealButton() {
+    return InkWell(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FoodSearchScreen())),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.primary)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.add, color: AppColors.primary, size: 20),
+            SizedBox(width: 8),
+            Text('Add meal to plan', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCopyDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Copy Plan'),
+        content: Text('Would you like to copy today\'s meal plan to tomorrow?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final tomorrow = DateTime.now().add(const Duration(days: 1));
+              context.read<MealProvider>().copyDayPlan(DateTime.now(), tomorrow);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Plan copied to tomorrow!')));
+            },
+            child: const Text('Copy'),
+          ),
+        ],
+      ),
+    );
   }
 }

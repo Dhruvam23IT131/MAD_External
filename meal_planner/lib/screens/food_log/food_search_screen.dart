@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/constants/app_colors.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
-import '../../core/constants/app_colors.dart';
 
 class FoodSearchScreen extends StatefulWidget {
   const FoodSearchScreen({super.key});
@@ -16,6 +16,9 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<FoodItem> _searchResults = [];
   String _selectedMealType = 'Breakfast';
+  String _selectedCategory = 'All';
+
+  final List<String> _categories = ['All', 'Grains', 'Protein', 'Dairy', 'Snacks'];
 
   @override
   void initState() {
@@ -26,43 +29,218 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Add Food'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: const InputDecoration(
-                      hintText: 'Search food...',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    onChanged: (val) async {
-                      final results = await context.read<FoodProvider>().searchFoods(val);
-                      setState(() => _searchResults = results);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _buildMealTypeSelector(),
-          Expanded(
-            child: _searchResults.isEmpty && _searchController.text.isEmpty
-                ? _buildInitialList()
-                : _buildSearchResults(),
+        title: const Text('Add food', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
+        foregroundColor: AppColors.textPrimary,
+        actions: [
+          TextButton(
+            onPressed: _showAddCustomFoodDialog,
+            child: const Text('Custom +', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddCustomFoodDialog,
-        label: const Text('Custom Food'),
-        icon: const Icon(Icons.add),
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          _buildCategoryFilter(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_searchController.text.isEmpty) ...[
+                    _buildSectionHeader('Recent'),
+                    _buildFoodList(context.watch<FoodProvider>().foods.take(3).toList()),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader('Popular'),
+                    _buildFoodList(context.watch<FoodProvider>().foods.skip(3).toList()),
+                  ] else ...[
+                    _buildSectionHeader('Search Results'),
+                    _buildFoodList(_searchResults),
+                  ],
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (val) async {
+          final results = await context.read<FoodProvider>().searchFoods(val);
+          setState(() => _searchResults = results);
+        },
+        decoration: InputDecoration(
+          hintText: 'Search food items...',
+          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilter() {
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _categories.length,
+        itemBuilder: (context, index) {
+          final cat = _categories[index];
+          final isSelected = _selectedCategory == cat;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text(cat, style: TextStyle(color: isSelected ? Colors.white : AppColors.textSecondary, fontSize: 12)),
+              selected: isSelected,
+              onSelected: (val) => setState(() => _selectedCategory = cat),
+              selectedColor: AppColors.primary,
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              side: BorderSide(color: isSelected ? AppColors.primary : AppColors.divider),
+              showCheckmark: false,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12.0),
+      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+    );
+  }
+
+  Widget _buildFoodList(List<FoodItem> foods) {
+    if (foods.isEmpty) return const Text('No items found');
+    return Column(
+      children: foods.map((food) => _buildFoodTile(food)).toList(),
+    );
+  }
+
+  Widget _buildFoodTile(FoodItem food) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12)),
+            child: Icon(_getCategoryIcon(food.category), color: AppColors.textPrimary, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(food.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text('per ${food.servingSize}${food.servingUnit} • ${food.calories.toInt()} kcal', 
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add, color: AppColors.primary),
+            onPressed: () => _showAddMealDialog(food),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch(category.toLowerCase()) {
+        case 'grains': return Icons.grass;
+        case 'protein': return Icons.egg_outlined;
+        case 'dairy': return Icons.local_drink_outlined;
+        default: return Icons.fastfood_outlined;
+    }
+  }
+
+  void _showAddMealDialog(FoodItem food) {
+    double qty = 1.0;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Add ${food.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: _selectedMealType,
+                items: ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
+                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedMealType = val!),
+                decoration: const InputDecoration(labelText: 'Meal Type'),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Text('Quantity: '),
+                  Expanded(
+                    child: Slider(
+                      value: qty,
+                      min: 0.5,
+                      max: 10,
+                      divisions: 19,
+                      label: qty.toString(),
+                      onChanged: (val) => setDialogState(() => qty = val),
+                    ),
+                  ),
+                  Text('${qty.toStringAsFixed(1)} units'),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final entry = MealEntry(
+                  id: const Uuid().v4(),
+                  foodItemId: food.id,
+                  foodName: food.name,
+                  mealType: _selectedMealType,
+                  date: DateTime.now(),
+                  quantity: qty,
+                  totalCalories: food.calories * qty,
+                  totalProtein: food.protein * qty,
+                  totalCarbs: food.carbs * qty,
+                  totalFat: food.fat * qty,
+                );
+                context.read<MealProvider>().addMealEntry(entry);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Meal added!')));
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -108,114 +286,8 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
               );
               context.read<FoodProvider>().addCustomFood(food);
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Custom food added!')));
             },
             child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMealTypeSelector() {
-    final types = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: types.map((type) => Padding(
-          padding: const EdgeInsets.only(right: 8.0),
-          child: ChoiceChip(
-            label: Text(type),
-            selected: _selectedMealType == type,
-            onSelected: (selected) {
-              if (selected) setState(() => _selectedMealType = type);
-            },
-          ),
-        )).toList(),
-      ),
-    );
-  }
-
-  Widget _buildInitialList() {
-    return Consumer<FoodProvider>(
-      builder: (context, foodProv, child) {
-        return ListView.builder(
-          itemCount: foodProv.foods.length,
-          itemBuilder: (context, index) {
-            return _foodTile(foodProv.foods[index]);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildSearchResults() {
-    if (_searchResults.isEmpty) {
-      return const Center(child: Text('No food found. Try adding custom food?'));
-    }
-    return ListView.builder(
-      itemCount: _searchResults.length,
-      itemBuilder: (context, index) {
-        return _foodTile(_searchResults[index]);
-      },
-    );
-  }
-
-  Widget _foodTile(FoodItem food) {
-    return ListTile(
-      title: Text(food.name),
-      subtitle: Text('${food.calories.toInt()} kcal / ${food.servingSize.toInt()} ${food.servingUnit}'),
-      trailing: IconButton(
-        icon: const Icon(Icons.add_circle_outline, color: AppColors.primary),
-        onPressed: () => _showAddDialog(food),
-      ),
-    );
-  }
-
-  void _showAddDialog(FoodItem food) {
-    final qtyController = TextEditingController(text: '1');
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add ${food.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: qtyController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Quantity (${food.servingUnit}s)',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final qty = double.tryParse(qtyController.text) ?? 1.0;
-              final entry = MealEntry(
-                id: const Uuid().v4(),
-                foodItemId: food.id,
-                foodName: food.name,
-                mealType: _selectedMealType,
-                date: DateTime.now(),
-                quantity: qty,
-                totalCalories: food.calories * qty,
-                totalProtein: food.protein * qty,
-                totalCarbs: food.carbs * qty,
-                totalFat: food.fat * qty,
-              );
-              context.read<MealProvider>().addMealEntry(entry);
-              Navigator.pop(context);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Added ${food.name} to $_selectedMealType')),
-              );
-            },
-            child: const Text('Add'),
           ),
         ],
       ),
